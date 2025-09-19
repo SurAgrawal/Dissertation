@@ -4,6 +4,7 @@ import os, argparse
 import numpy as np
 import torch
 from tqdm import tqdm
+import torch.nn as nn
 
 from models import DeepONet
 from data import make_grid, sample_grf
@@ -19,6 +20,7 @@ def parse_args():
     p.add_argument('--batch',  type=int, default=64, help='batch size (# of functions per step)')
     p.add_argument('--width',  type=int, default=50, help='MLP width')
     p.add_argument('--depth',  type=int, default=5,  help='MLP depth (layers)')
+    p.add_argument('--activation', default='tanh', choices=['tanh', 'relu', 'silu', 'gelu', 'softplus'])
     p.add_argument('--lr',     type=float, default=1e-3, help='Adam learning rate')
     p.add_argument('--save-dir', default='checkpoints', help='where to store runs (or /mnt/data/checkpoints)')
     p.add_argument('--run-name', default='', help='optional suffix for the run directory name')
@@ -29,6 +31,12 @@ def main():
     args = parse_args()
     set_seed(args.seed)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # --- map name of activation function ---
+    act_map = {
+        'tanh': nn.Tanh, 'relu': nn.ReLU, 'silu': nn.SiLU, 'gelu': nn.GELU, 'softplus': nn.Softplus
+    }
+    act = act_map[args.activation]
 
     # --- Run directory & config ---
     run_dir = make_run_dir(args.save_dir, args.run_name)
@@ -52,7 +60,7 @@ def main():
     grid_t  = torch.tensor(grid_np, dtype=torch.float32, device=device) # (m,)
 
     # --- Model / Optimizer ---
-    model = DeepONet(m=args.m, width=args.width, depth=args.depth).to(device)
+    model = DeepONet(m=args.m, width=args.width, depth=args.depth, feat_dim=50, act=act).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     best_rel = float('inf')
