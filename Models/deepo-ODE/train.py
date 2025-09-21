@@ -6,9 +6,9 @@ import torch
 from tqdm import tqdm
 import torch.nn as nn
 
-from models import DeepONet
-from data import make_grid, sample_grf
-from utils import set_seed, make_run_dir, save_json, save_checkpoint
+from Models.Shared.models import DeepONet
+from Models.Shared.data import make_grid, sample_grf
+from Models.Shared.utils import set_seed, make_run_dir, save_json, save_checkpoint
 
 def parse_args():
     p = argparse.ArgumentParser("Physics-informed DeepONet – ODE replication")

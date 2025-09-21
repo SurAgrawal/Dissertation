@@ -1,14 +1,14 @@
 # eval.py
 from __future__ import annotations
-import os, argparse, json
+import os, argparse
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import time
 
 
-from models import DeepONet
-from utils import load_checkpoint, set_seed
+from Models.Shared.models import DeepONet
+from Models.Shared.utils import load_checkpoint, set_seed
 
 def parse_args():
     p = argparse.ArgumentParser("Evaluate a trained DeepONet ODE model (with points & errors)")
@@ -70,7 +70,7 @@ def main():
         dx   = float(np.load(dx_path)[0])
     else:
         print("No saved test set found; generating a fresh one for quick plots.")
-        from data import make_grid, sample_grf
+        from Models.Shared.data import make_grid, sample_grf
         ell = float(cfg.get('ell', 0.2))
         ntest = int(cfg.get('ntest', 128))
         grid = make_grid(m, 0.0, 1.0)
