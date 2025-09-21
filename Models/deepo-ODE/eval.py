@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import time
 
 
-from Models.Shared.models import DeepONet
-from Models.Shared.utils import load_checkpoint, set_seed
+from ..Shared.models import DeepONet
+from ..Shared.utils import load_checkpoint, set_seed
 
 def parse_args():
     p = argparse.ArgumentParser("Evaluate a trained DeepONet ODE model (with points & errors)")

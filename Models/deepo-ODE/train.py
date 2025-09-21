@@ -6,9 +6,9 @@ import torch
 from tqdm import tqdm
 import torch.nn as nn
 
-from Models.Shared.models import DeepONet
-from Models.Shared.data import make_grid, sample_grf
-from Models.Shared.utils import set_seed, make_run_dir, save_json, save_checkpoint
+from ..Shared.models import DeepONet
+from ..Shared.data import make_grid, sample_grf
+from ..Shared.utils import set_seed, make_run_dir, save_json, save_checkpoint
 
 def parse_args():
     p = argparse.ArgumentParser("Physics-informed DeepONet – ODE replication")
@@ -22,7 +22,7 @@ def parse_args():
     p.add_argument('--depth',  type=int, default=5,  help='MLP depth (layers)')
     p.add_argument('--activation', default='tanh', choices=['tanh', 'relu', 'silu', 'gelu', 'softplus'])
     p.add_argument('--lr',     type=float, default=1e-3, help='Adam learning rate')
-    p.add_argument('--save-dir', default='checkpoints', help='where to store runs (or /mnt/data/checkpoints)')
+    p.add_argument('--save-dir', default='Models/deepo-ODE/checkpoints', help='where to store runs (or /mnt/data/checkpoints)')
     p.add_argument('--run-name', default='', help='optional suffix for the run directory name')
     p.add_argument('--seed',   type=int, default=123, help='random seed')
     return p.parse_args()

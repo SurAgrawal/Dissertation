@@ -3,6 +3,7 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/Models/DiffusionReaction/checkpoints" />
       <excludeFolder url="file://$MODULE_DIR$/Models/deepo-ODE/checkpoints" />
       <excludeFolder url="file://$MODULE_DIR$/Models/deepo-ODE/checkpoints/20250919-102039" />
       <excludeFolder url="file://$MODULE_DIR$/Models/deepo-ODE/checkpoints/20250919-114822" />

@@ -1,4 +1,4 @@
-# train_dr.py
+# train.py
 from __future__ import annotations
 import os, argparse
 import numpy as np
@@ -6,25 +6,25 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from Models.Shared.models import DeepONet
-from Models.Shared.data import make_grid, sample_grf
-from Models.Shared.utils import set_seed, make_run_dir, save_json, save_checkpoint
+from ..Shared.models import DeepONet
+from ..Shared.data import make_grid, sample_grf
+from ..Shared.utils import set_seed, make_run_dir, save_json, save_checkpoint
 
 def parse_args():
     p = argparse.ArgumentParser("Physics-informed DeepONet – Diffusion–reaction PDE")
     # data / grids
-    p.add_argument('--ntrain', type=int, default=512, help='training functions')
+    p.add_argument('--ntrain', type=int, default=10000, help='training functions')
     p.add_argument('--ntest',  type=int, default=128, help='test functions (saved for eval)')
     p.add_argument('--m',      type=int, default=100, help='# x-grid sensor points on [0,1]')
     p.add_argument('--ell',    type=float, default=0.2, help='RBF kernel length-scale for u(x)')
     # network
-    p.add_argument('--width',  type=int, default=64)
+    p.add_argument('--width',  type=int, default=50)
     p.add_argument('--depth',  type=int, default=5)
-    p.add_argument('--feat-dim', type=int, default=64)
+    p.add_argument('--feat-dim', type=int, default=50)
     p.add_argument('--activation', default='tanh', choices=['tanh','relu','silu','gelu','softplus'])
     # physics / training
-    p.add_argument('--steps',  type=int, default=10000, help='training iterations')
-    p.add_argument('--batch',  type=int, default=64, help='batch size (functions)')
+    p.add_argument('--steps',  type=int, default=12000, help='training iterations')
+    p.add_argument('--batch',  type=int, default=1000, help='batch size (functions)')
     p.add_argument('--q',      type=int, default=256, help='# collocation points per function')
     p.add_argument('--q-ic',   type=int, default=128, help='# IC points per function')
     p.add_argument('--q-bc',   type=int, default=128, help='# BC points per function (each boundary)')
@@ -35,7 +35,7 @@ def parse_args():
     p.add_argument('--w-bc',   type=float, default=1.0, help='weight for BC loss')
     p.add_argument('--lr',     type=float, default=1e-3, help='Adam lr')
     # housekeeping
-    p.add_argument('--save-dir', default='checkpoints')
+    p.add_argument('--save-dir', default='Models/DiffusionReaction/checkpoints')
     p.add_argument('--run-name', default='dr')
     p.add_argument('--seed',   type=int, default=123)
     return p.parse_args()
@@ -133,24 +133,45 @@ def main():
         metric = None
         if step % 500 == 0 or step == args.steps:
             model.eval()
-            with torch.no_grad():
-                Bv = min(32, args.ntest)
-                # reuse random collocation for metric
-                x_idx_v = torch.randint(0, args.m, (Bv, args.q), device=device)
-                x_v = grid_t[x_idx_v]
-                t_v = torch.rand(Bv, args.q, device=device)
-                XT_v = torch.stack([x_v, t_v], dim=-1).requires_grad_(True)
 
-                s_v = model(u_test[:Bv], XT_v)
-                grads_v = torch.autograd.grad(s_v, XT_v,
-                               grad_outputs=torch.ones_like(s_v), create_graph=True)[0]
-                s_x_v, s_t_v = grads_v[...,0], grads_v[...,1]
-                g2_v = torch.autograd.grad(s_x_v, XT_v,
-                               grad_outputs=torch.ones_like(s_x_v), create_graph=True)[0]
-                s_xx_v = g2_v[...,0]
-                u_forcing_v = torch.gather(u_test[:Bv], 1, x_idx_v)
-                res_v = s_t_v - args.D*s_xx_v - args.k*(s_v**2) - u_forcing_v
-                metric = res_v.pow(2).mean().item()  # mean PDE residual MSE
+            # NOTE: do NOT use torch.no_grad() here; we need input gradients
+            Bv = min(32, args.ntest)
+
+            # random collocation points
+            x_idx_v = torch.randint(0, args.m, (Bv, args.q), device=device)
+            x_v = grid_t[x_idx_v]
+            t_v = torch.rand(Bv, args.q, device=device)
+
+            XT_v = torch.stack([x_v, t_v], dim=-1)
+            XT_v = XT_v.detach().requires_grad_(True)  # make it a leaf & track grads
+
+            # forward
+            s_v = model(u_test[:Bv], XT_v)  # (Bv, Q)
+
+            # first partials wrt x,t
+            grads_v = torch.autograd.grad(
+                outputs=s_v,
+                inputs=XT_v,
+                grad_outputs=torch.ones_like(s_v),
+                create_graph=True,  # we only need numbers, not higher-order for val
+                retain_graph=True
+            )[0]  # (Bv, Q, 2)
+            s_x_v = grads_v[..., 0]
+            s_t_v = grads_v[..., 1]
+
+            # second derivative wrt x
+            g2_v = torch.autograd.grad(
+                outputs=s_x_v,
+                inputs=XT_v,
+                grad_outputs=torch.ones_like(s_x_v),
+                create_graph=False,
+                retain_graph=False
+            )[0]
+            s_xx_v = g2_v[..., 0]
+
+            u_forcing_v = torch.gather(u_test[:Bv], 1, x_idx_v)
+            res_v = s_t_v - args.D * s_xx_v - args.k * (s_v ** 2) - u_forcing_v
+            metric = res_v.pow(2).mean().item()
 
             # save last & best (by residual metric)
             save_checkpoint(last_ckpt, model, opt, step=step, metric_relL2=metric, cfg=vars(args))

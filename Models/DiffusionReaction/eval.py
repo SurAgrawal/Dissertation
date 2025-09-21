@@ -1,12 +1,14 @@
-# eval_dr.py
+# eval.py
 from __future__ import annotations
 import os, argparse, time
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from Models.Shared.models import DeepONet
-from Models.Shared.utils import set_seed, load_checkpoint
+from ..Shared.models import DeepONet
+from ..Shared.utils import set_seed, load_checkpoint
 
 def parse_args():
     p = argparse.ArgumentParser("Evaluate physics-informed DeepONet on diffusion–reaction PDE")
@@ -135,6 +137,49 @@ def main():
         # optional reference & rel-L2 over the (x,t) grid
         if args.with_reference:
             s_ref = solve_dr(u_row[0], xs, T=1.0, nt=args.nt, D=D, k=K)   # (m, nt)
+
+            # common scale for Ref & Pred
+            vmin = float(min(s_ref.min(), s_hat.min()))
+            vmax = float(max(s_ref.max(), s_hat.max()))
+            norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+
+            fig4, axs4 = plt.subplots(1, 3, figsize=(16, 4.2))
+            ax_ref, ax_pred, ax_err = axs4
+
+            imA = ax_ref.imshow(s_ref.T, origin='lower', aspect='auto',
+                                extent=[xs[0], xs[-1], ts[0], ts[-1]], norm=norm)
+            ax_ref.set_title("Reference s(x,t)");
+            ax_ref.set_xlabel('x');
+            ax_ref.set_ylabel('t')
+
+            imB = ax_pred.imshow(s_hat.T, origin='lower', aspect='auto',
+                                 extent=[xs[0], xs[-1], ts[0], ts[-1]], norm=norm)
+            ax_pred.set_title("Predicted ŝ(x,t)");
+            ax_pred.set_xlabel('x');
+            ax_pred.set_ylabel('t')
+
+            imC = ax_err.imshow((s_hat - s_ref).T, origin='lower', aspect='auto',extent=[xs[0], xs[-1], ts[0], ts[-1]])
+            ax_err.set_title("Pred − Ref");
+            ax_err.set_xlabel('x');
+            ax_err.set_ylabel('t')
+
+            # 👉 Put the shared colorbar for Ref/Pred to the RIGHT of the Predicted axes,
+            # with a larger pad so it sits further right.
+            divider = make_axes_locatable(ax_pred)
+            cax_pred = divider.append_axes("right", size="3%", pad=0.12)  # ↑ increase pad (try 0.10–0.16)
+            cb_shared = fig4.colorbar(imA, cax=cax_pred)
+            cb_shared.set_label("s(x,t)")
+
+            # Keep (or move) the error bar as you like; here we keep it beside the error panel
+            divider_err = make_axes_locatable(ax_err)
+            cax_err = divider_err.append_axes("right", size="3%", pad=0.04)
+            cb_err = fig4.colorbar(imC, cax=cax_err)
+            cb_err.set_label("error")
+
+            fig4.tight_layout()
+            plt.savefig(os.path.join(outdir, f"ex_{i:02d}_ref_pred_same_scale.png"), dpi=150)
+            plt.close(fig4)
+
             num = np.linalg.norm(s_hat - s_ref)
             den = np.linalg.norm(s_ref) + 1e-12
             rel = num / den
