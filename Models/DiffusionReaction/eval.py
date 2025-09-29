@@ -158,8 +158,8 @@ def main():
             ax_pred.set_xlabel('x');
             ax_pred.set_ylabel('t')
 
-            imC = ax_err.imshow((s_hat - s_ref).T, origin='lower', aspect='auto',extent=[xs[0], xs[-1], ts[0], ts[-1]])
-            ax_err.set_title("Pred − Ref");
+            imC = ax_err.imshow((abs(s_hat - s_ref)).T, origin='lower', aspect='auto',extent=[xs[0], xs[-1], ts[0], ts[-1]])
+            ax_err.set_title("|Pred − Ref|");
             ax_err.set_xlabel('x');
             ax_err.set_ylabel('t')
 
@@ -180,20 +180,6 @@ def main():
             plt.savefig(os.path.join(outdir, f"ex_{i:02d}_ref_pred_same_scale.png"), dpi=150)
             plt.close(fig4)
 
-            num = np.linalg.norm(s_hat - s_ref)
-            den = np.linalg.norm(s_ref) + 1e-12
-            rel = num / den
-            print(f"example {idx}: relL2 vs reference = {rel:.6f}")
-            # side-by-side
-            fig3, axs3 = plt.subplots(1, 2, figsize=(11, 4.2))
-            imr0 = axs3[0].imshow(s_ref.T, origin='lower', aspect='auto', extent=[xs[0], xs[-1], ts[0], ts[-1]])
-            axs3[0].set_title("Reference s(x,t)"); axs3[0].set_xlabel('x'); axs3[0].set_ylabel('t')
-            fig3.colorbar(imr0, ax=axs3[0], fraction=0.046, pad=0.04)
-            imr1 = axs3[1].imshow((s_hat - s_ref).T, origin='lower', aspect='auto', extent=[xs[0], xs[-1], ts[0], ts[-1]])
-            axs3[1].set_title("Pred - Ref"); axs3[1].set_xlabel('x'); axs3[1].set_ylabel('t')
-            fig3.colorbar(imr1, ax=axs3[1], fraction=0.046, pad=0.04)
-            fig3.tight_layout()
-            plt.savefig(os.path.join(outdir, f"ex_{i:02d}_ref_compare.png"), dpi=150); plt.close(fig3)
 
     print(f"Wrote figures to: {outdir}")
 

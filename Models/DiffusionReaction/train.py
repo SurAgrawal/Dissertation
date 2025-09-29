@@ -1,10 +1,12 @@
 # train.py
 from __future__ import annotations
-import os, argparse
+import argparse
 import numpy as np
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import os
 
 from ..Shared.models import DeepONet
 from ..Shared.data import make_grid, sample_grf
@@ -24,7 +26,7 @@ def parse_args():
     p.add_argument('--activation', default='tanh', choices=['tanh','relu','silu','gelu','softplus'])
     # physics / training
     p.add_argument('--steps',  type=int, default=12000, help='training iterations')
-    p.add_argument('--batch',  type=int, default=1000, help='batch size (functions)')
+    p.add_argument('--batch',  type=int, default=3000, help='batch size (functions)')
     p.add_argument('--q',      type=int, default=256, help='# collocation points per function')
     p.add_argument('--q-ic',   type=int, default=128, help='# IC points per function')
     p.add_argument('--q-bc',   type=int, default=128, help='# BC points per function (each boundary)')
@@ -35,7 +37,7 @@ def parse_args():
     p.add_argument('--w-bc',   type=float, default=1.0, help='weight for BC loss')
     p.add_argument('--lr',     type=float, default=1e-3, help='Adam lr')
     # housekeeping
-    p.add_argument('--save-dir', default='Models/DiffusionReaction/checkpoints')
+    p.add_argument('--save-dir', default='Models\DiffusionReaction\checkpoints')
     p.add_argument('--run-name', default='dr')
     p.add_argument('--seed',   type=int, default=123)
     return p.parse_args()
@@ -70,6 +72,7 @@ def main():
     model = DeepONet(m=args.m, width=args.width, depth=args.depth,
                      feat_dim=args.feat_dim, act=act, in_dim=2).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    hist = {'step': [], 'loss': [], 'loss_pde': [], 'loss_ic': [], 'loss_bc': [], 'lr': []}
 
     best_metric = float('inf')
     last_ckpt = os.path.join(run_dir, 'last.pt')
@@ -127,7 +130,21 @@ def main():
 
         opt.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
+
+        # --- log history ---
+        hist['step'].append(step)
+        hist['loss'].append(float(loss.item()))
+        hist['loss_pde'].append(float(loss_pde.item()))
+        hist['loss_ic'].append(float(loss_ic.item()))
+        hist['loss_bc'].append(float(loss_bc.item()))
+        lr_now = next(iter(opt.param_groups))['lr']
+        hist['lr'].append(lr_now)
+
+        if step % 200 == 0:
+            np.savez(os.path.join(run_dir, 'train_log.npz'), **hist)
+
 
         # quick physics metric on a slice of test set
         metric = None
@@ -153,7 +170,7 @@ def main():
                 outputs=s_v,
                 inputs=XT_v,
                 grad_outputs=torch.ones_like(s_v),
-                create_graph=True,  # we only need numbers, not higher-order for val
+                create_graph=True,  
                 retain_graph=True
             )[0]  # (Bv, Q, 2)
             s_x_v = grads_v[..., 0]
@@ -181,6 +198,23 @@ def main():
 
         pbar.set_description(f"step {step:5d}  loss={loss.item():.3e}" +
                              (f"  resMSE={metric:.3e}" if metric is not None else ""))
+
+    # --- save final log + plot training curve ---
+    np.savez(os.path.join(run_dir, 'train_log.npz'), **hist)
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.semilogy(hist['step'], hist['loss'], label='total')
+    ax.semilogy(hist['step'], hist['loss_pde'], label='PDE')
+    ax.semilogy(hist['step'], hist['loss_ic'], label='IC')
+    ax.semilogy(hist['step'], hist['loss_bc'], label='BC')
+    ax.set_xlabel('step');
+    ax.set_ylabel('loss');
+    ax.set_title('Training losses')
+    ax.grid(True, which='both', alpha=0.3);
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(os.path.join(run_dir, 'training_curves_from_log.png'), dpi=150)
+    plt.close(fig)
 
     print(f"Training done. Best residual-MSE: {best_metric:.4e}")
     print(f"Best checkpoint: {best_ckpt}")
