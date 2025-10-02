@@ -1,0 +1,17 @@
+Run directory: C:\Users\Sur Agrawal\PycharmProjects\Dissertation\Models\deepo-ODE\experiments\20251002_sweep\20251002-161241-w20-d4-atanh-s123
+
+  0%|                                                                         | 0/8 [00:00<?, ?it/s]
+step     1  loss=1.051e+00:   0%|                                             | 0/8 [00:00<?, ?it/s]
+step     1  loss=1.051e+00:  12%|####6                                | 1/8 [00:00<00:01,  6.29it/s]
+step     2  loss=9.646e-01:  12%|####6                                | 1/8 [00:00<00:01,  6.29it/s]
+step     3  loss=8.579e-01:  12%|####6                                | 1/8 [00:00<00:01,  6.29it/s]
+step     4  loss=8.980e-01:  12%|####6                                | 1/8 [00:00<00:01,  6.29it/s]
+step     5  loss=9.071e-01:  12%|####6                                | 1/8 [00:00<00:01,  6.29it/s]
+step     6  loss=9.517e-01:  12%|####6                                | 1/8 [00:00<00:01,  6.29it/s]
+step     7  loss=7.979e-01:  12%|####6                                | 1/8 [00:00<00:01,  6.29it/s]
+step     8  loss=7.755e-01  relL2=1.024e+00:  12%|##5                 | 1/8 [00:00<00:01,  6.29it/s]
+step     8  loss=7.755e-01  relL2=1.024e+00: 100%|####################| 8/8 [00:00<00:00, 36.52it/s]
+Saved training log to: C:\Users\Sur Agrawal\PycharmProjects\Dissertation\Models\deepo-ODE\experiments\20251002_sweep\20251002-161241-w20-d4-atanh-s123\train_log.npz
+Training done. Best rel-L2: 1.0236e+00
+Best checkpoint: C:\Users\Sur Agrawal\PycharmProjects\Dissertation\Models\deepo-ODE\experiments\20251002_sweep\20251002-161241-w20-d4-atanh-s123\best.pt
+Last checkpoint: C:\Users\Sur Agrawal\PycharmProjects\Dissertation\Models\deepo-ODE\experiments\20251002_sweep\20251002-161241-w20-d4-atanh-s123\last.pt

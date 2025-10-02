@@ -1,0 +1,24 @@
+plot_train_log.py failed for w20-d4-atanh-s123: usage: Plot training losses from train_log.npz [-h] --log LOG [--out OUT]
+                                               [--smooth SMOOTH]
+Plot training losses from train_log.npz: error: the following arguments are required: --log
+plot_train_log.py failed for w20-d6-atanh-s123: usage: Plot training losses from train_log.npz [-h] --log LOG [--out OUT]
+                                               [--smooth SMOOTH]
+Plot training losses from train_log.npz: error: the following arguments are required: --log
+plot_train_log.py failed for w30-d4-atanh-s123: usage: Plot training losses from train_log.npz [-h] --log LOG [--out OUT]
+                                               [--smooth SMOOTH]
+Plot training losses from train_log.npz: error: the following arguments are required: --log
+plot_train_log.py failed for w30-d6-atanh-s123: usage: Plot training losses from train_log.npz [-h] --log LOG [--out OUT]
+                                               [--smooth SMOOTH]
+Plot training losses from train_log.npz: error: the following arguments are required: --log
+plot_train_log.py failed for w40-d4-atanh-s123: usage: Plot training losses from train_log.npz [-h] --log LOG [--out OUT]
+                                               [--smooth SMOOTH]
+Plot training losses from train_log.npz: error: the following arguments are required: --log
+plot_train_log.py failed for w40-d6-atanh-s123: usage: Plot training losses from train_log.npz [-h] --log LOG [--out OUT]
+                                               [--smooth SMOOTH]
+Plot training losses from train_log.npz: error: the following arguments are required: --log
+plot_train_log.py failed for w50-d4-atanh-s123: usage: Plot training losses from train_log.npz [-h] --log LOG [--out OUT]
+                                               [--smooth SMOOTH]
+Plot training losses from train_log.npz: error: the following arguments are required: --log
+plot_train_log.py failed for w50-d6-atanh-s123: usage: Plot training losses from train_log.npz [-h] --log LOG [--out OUT]
+                                               [--smooth SMOOTH]
+Plot training losses from train_log.npz: error: the following arguments are required: --log
