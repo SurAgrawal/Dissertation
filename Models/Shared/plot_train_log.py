@@ -53,12 +53,21 @@ def main():
     ax.semilogy(sstep, loss_ic,  label="IC")
     ax.semilogy(sstep, loss_bc,  label="BC")
     ax.set_xlabel("step"); ax.set_ylabel("loss"); ax.set_title("Training losses (semilog)")
+
+    # ax.plot(sstep, loss,     label="total")
+    # ax.plot(sstep, loss_pde, label="PDE")
+    # ax.plot(sstep, loss_ic,  label="IC")
+    # ax.plot(sstep, loss_bc,  label="BC")
+    # ax.set_yscale("symlog", linthresh=1e-2, base=10, linscale=1)
+
     ax.grid(True, which="both", alpha=0.3); ax.legend()
 
-    # plot LR on a twin y-axis for context
-    ax2 = ax.twinx()
-    ax2.plot(sstep, lr, color="gray", alpha=0.6, linewidth=1.0)
-    ax2.set_ylabel("learning rate")
+
+
+    # # plot LR on a twin y-axis for context
+    # ax2 = ax.twinx()
+    # ax2.plot(sstep, lr, color="gray", alpha=0.6, linewidth=1.0, label='LR')
+    # ax2.set_ylabel("learning rate")
 
     fig.tight_layout()
     out = args.out or os.path.join(os.path.dirname(args.log), "training_curves_from_log.png")

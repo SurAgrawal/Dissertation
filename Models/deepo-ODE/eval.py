@@ -6,8 +6,8 @@ import torch
 import matplotlib.pyplot as plt
 
 from ..Shared.models import DeepONet
-from ..Shared.utils import load_checkpoint, set_seed
 from ..Shared.data import make_grid, sample_grf
+from ..Shared.utils import load_checkpoint, set_seed, save_json
 
 
 def parse_args():
@@ -87,6 +87,7 @@ def main():
     s_true_np = s_true.cpu().numpy()
     N         = s_hat_np.shape[0]
 
+
     # --- Overall metrics ---
     rels, maes, rmses, maxabs, r2s = [], [], [], [], []
     for i in range(N):
@@ -95,11 +96,63 @@ def main():
         maxabs.append(m_i['MaxAbs']); r2s.append(m_i['R2'])
 
     print(f"Overall (mean over {N} tests):")
-    print(f"  relL2     = {np.mean(rels):.6f}")
-    print(f"  MAE       = {np.mean(maes):.6f}")
-    print(f"  RMSE      = {np.mean(rmses):.6f}")
-    print(f"  MaxAbs    = {np.mean(maxabs):.6f}")
-    print(f"  R^2       = {np.mean(r2s):.6f}")
+    print(f"  relL2     = {np.mean(rels):.6f} ± {np.std(rels, ddof=1):.6f}")
+    print(f"  MAE       = {np.mean(maes):.6f} ± {np.std(maes, ddof=1):.6f}")
+    print(f"  RMSE      = {np.mean(rmses):.6f} ± {np.std(rmses, ddof=1):.6f}")
+    print(f"  MaxAbs    = {np.mean(maxabs):.6f} ± {np.std(maxabs, ddof=1):.6f}")
+    print(f"  R^2       = {np.mean(r2s):.6f} ± {np.std(r2s, ddof=1):.6f}")
+
+    # --- Save overall metrics to the RUN DIR (model folder) ---
+    N = len(rels)
+
+    def _stats(a):
+        a = np.asarray(a)
+        sd = float(np.std(a, ddof=1)) if a.size > 1 else 0.0
+        return {
+            "mean": float(np.mean(a)),
+            "std": sd,
+            "median": float(np.median(a)),
+            "p05": float(np.quantile(a, 0.05)),
+            "p95": float(np.quantile(a, 0.95)),
+            "ci95": float(1.96 * sd / np.sqrt(max(N, 1))),  # 95% CI on the mean
+        }
+
+    overall = {
+        "N_test": N,
+        "relL2": _stats(rels),
+        "MAE": _stats(maes),
+        "RMSE": _stats(rmses),
+        "MaxAbs": _stats(maxabs),
+        "R2": _stats(r2s),
+    }
+
+    metrics_json_path = os.path.join(run_dir, "metrics.json")
+    save_json(overall, metrics_json_path)
+    print(f"Saved overall metrics to: {metrics_json_path}")
+
+    # --- Summary bar plot (mean ± 95% CI) for relL2 ---
+    label_activation = cfg.get("activation", "tanh")
+    bar_label = f"Physics-informed DeepONet ({label_activation})"
+
+    mean_rel = overall["relL2"]["mean"]
+    err_rel = overall["relL2"]["ci95"] if N > 1 else 0.0
+
+    fig, ax = plt.subplots(figsize=(4.0, 3.2))
+    ax.bar([0], [mean_rel], width=0.6, alpha=0.6, edgecolor="black")
+    ax.errorbar([0], [mean_rel], yerr=[err_rel], fmt="k", lw=1.5, capsize=6)
+
+    ax.set_xticks([0])
+    ax.set_xticklabels([bar_label], rotation=0)
+    ax.set_yscale("log")  # match the paper’s semilog look
+    ax.set_ylabel(r"Rel. $L^2$ error")
+    ax.set_title("Test error summary")
+    ax.grid(alpha=0.2, which="both", axis="y")
+
+    fig.tight_layout()
+    summary_png_path = os.path.join(run_dir, "relL2_summary_bar.png")
+    plt.savefig(summary_png_path, dpi=200)
+    plt.close(fig)
+    print(f"Saved summary bar plot to: {summary_png_path}")
 
     # Save per-sample metrics CSV
     per_metrics_path = os.path.join(outdir, "per_sample_metrics.csv")
@@ -110,42 +163,58 @@ def main():
             w.writerow([i, rels[i], maes[i], rmses[i], maxabs[i], r2s[i]])
     print(f"Wrote per-sample metrics to: {per_metrics_path}")
 
+
     # --- Plots for a few examples (solution + L1 + L2) ---
     k = min(args.num_examples, N)
     for i in range(k):
         y_true = s_true_np[i]
         y_pred = s_hat_np[i]
-        err_L1 = np.abs(y_pred - y_true)          # pointwise L1
-        err_L2 = (y_pred - y_true) ** 2           # pointwise L2 (squared error)
 
-        # Save the per-point table for this example (now includes L1 and L2)
-        table = np.column_stack([xs, y_true, y_pred, err_L1, err_L2])
+        eps = 1e-12
+        err = y_pred - y_true
+        rel_err = err / (np.abs(y_true) + eps)  # pointwise relative error (L1-style)
+        sq_err = err ** 2  # pointwise L2 (squared error) for THIS sample
+        rel_sq_err = sq_err / (y_true ** 2 + eps)  # pointwise relative L2 (squared) for THIS sample
+
+        # Save a per-point CSV for THIS example (now includes both absolute & relative L2)
+        table = np.column_stack([xs, y_true, y_pred, rel_err, sq_err, rel_sq_err])
         np.savetxt(os.path.join(outdir, f'example_{i:02d}_points.csv'),
-                   table, delimiter=',', header='x,s_true,s_pred,abs_error,L2_error', comments='')
+                   table, delimiter=',',
+                   header='x,s_true,s_pred,relative_abs_error,squared_error,relative_squared_error',
+                   comments='')
 
-        # 3-panel figure: solution (with predicted points), L1 error, L2 error
-        fig, axs = plt.subplots(1, 3, figsize=(15, 4.2), gridspec_kw={'width_ratios':[2,1,1]})
+        # 3-panel figure for THIS example:
+        # left: solution; middle: pointwise relative |error|; right: pointwise relative L2 (squared)
+        fig, axs = plt.subplots(1, 3, figsize=(15, 4.2), gridspec_kw={'width_ratios': [2, 1, 1]})
 
-        # left: true + pred curves, plus pred *points*
+        # left: true + pred curves, plus pred points
         axs[0].plot(xs, y_true, label='true s(x)')
         axs[0].plot(xs, y_pred, linestyle='--', label='pred ŝ(x)')
         axs[0].plot(xs, y_pred, marker='o', linestyle='None', markersize=3, label='pred points')
-        axs[0].set_xlabel('x'); axs[0].set_ylabel('solution s'); axs[0].legend(loc='best')
-        axs[0].set_title(f'Example {i}: solution & predicted points'); axs[0].grid(alpha=0.3)
+        axs[0].set_xlabel('x');
+        axs[0].set_ylabel('solution s');
+        axs[0].legend(loc='best')
+        axs[0].set_title(f'Example {i}: solution & predicted points');
+        axs[0].grid(alpha=0.3)
 
-        # middle: pointwise absolute error (L1)
-        axs[1].plot(xs, err_L1, marker='o', markersize=2)
-        axs[1].set_xlabel('x'); axs[1].set_ylabel('|pred − true|')
-        axs[1].set_title('Pointwise L1 error'); axs[1].grid(alpha=0.3)
+        # middle: pointwise relative |error|
+        axs[1].plot(xs, rel_err, marker='o', markersize=2, linewidth=1)
+        axs[1].set_xlabel('x');
+        axs[1].set_ylabel('relative |error|')
+        axs[1].set_title('Pointwise relative L1-style');
+        axs[1].grid(alpha=0.3)
 
-        # right: pointwise squared error (L2)
-        axs[2].plot(xs, err_L2, marker='o', markersize=2)
-        axs[2].set_xlabel('x'); axs[2].set_ylabel('(pred − true)$^2$')
-        axs[2].set_title('Pointwise L2 error'); axs[2].grid(alpha=0.3)
+        # right: pointwise relative L2 (squared)
+        axs[2].plot(xs, rel_sq_err, marker='o', markersize=2, linewidth=1)
+        axs[2].set_xlabel('x');
+        axs[2].set_ylabel('relative squared error')
+        axs[2].set_title('Pointwise relative L2 (squared)');
+        axs[2].grid(alpha=0.3)
 
         fig.tight_layout()
-        out_path = os.path.join(outdir, f'example_{i:02d}_solution_L1_L2.png')
-        plt.savefig(out_path, dpi=150); plt.close(fig)
+        out_path = os.path.join(outdir, f'example_{i:02d}_solution_relL1_relL2pt.png')
+        plt.savefig(out_path, dpi=150)
+        plt.close(fig)
 
         # Keep the u(x) plot too
         fig_u, axu = plt.subplots(figsize=(7, 3.0))

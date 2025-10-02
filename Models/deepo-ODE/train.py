@@ -10,21 +10,26 @@ from ..Shared.models import DeepONet
 from ..Shared.data import make_grid, sample_grf
 from ..Shared.utils import set_seed, make_run_dir, save_json, save_checkpoint
 
+
+
+
 def parse_args():
     p = argparse.ArgumentParser("Physics-informed DeepONet – ODE replication")
-    p.add_argument('--ntrain', type=int, default=512, help='number of training functions')
-    p.add_argument('--ntest',  type=int, default=128, help='number of test functions (saved for eval)')
+    p.add_argument('--ntrain', type=int, default=2048, help='number of training functions')
+    p.add_argument('--ntest',  type=int, default=1000, help='number of test functions (saved for eval)')
     p.add_argument('--m',      type=int, default=100, help='number of grid/sensor points on [0,1]')
     p.add_argument('--ell',    type=float, default=0.2, help='RBF kernel length-scale')
     p.add_argument('--steps',  type=int, default=8000, help='training steps/iterations')
-    p.add_argument('--batch',  type=int, default=64, help='batch size (# of functions per step)')
+    p.add_argument('--batch',  type=int, default=256, help='batch size (# of functions per step)')
     p.add_argument('--width',  type=int, default=50, help='MLP width')
     p.add_argument('--depth',  type=int, default=5,  help='MLP depth (layers)')
     p.add_argument('--activation', default='tanh', choices=['tanh', 'relu', 'silu', 'gelu', 'softplus'])
     p.add_argument('--lr',     type=float, default=1e-3, help='Adam learning rate')
     p.add_argument('--save-dir', default='Models/deepo-ODE/checkpoints', help='where to store runs (or /mnt/data/checkpoints)')
     p.add_argument('--run-name', default='', help='optional suffix for the run directory name')
-    p.add_argument('--seed',   type=int, default=123, help='random seed')
+    p.add_argument('--seed',   type=int, default=1234, help='random seed')
+    p.add_argument('--nval', type=int, default=128, help='number of validation functions')
+    p.add_argument('--val-every', type=int, default=500, help='validate every N steps')
     return p.parse_args()
 
 def main():
@@ -43,19 +48,28 @@ def main():
     cfg_path = os.path.join(run_dir, 'config.json')
     save_json(vars(args), cfg_path)
     print(f"Run directory: {run_dir}")
+    # --- NPZ logger compatible with plot_train_log.py ---
+    log_path = os.path.join(run_dir, "train_log.npz")
+    hist = {"step": [], "loss": [], "loss_pde": [], "loss_ic": [], "loss_bc": [], "lr": []}
+
+    def _flush_npz():
+        np.savez(log_path, **{k: np.asarray(v, dtype=float) for k, v in hist.items()})
 
     # --- Data (generate train/test & save test for reproducible eval) ---
     grid_np = make_grid(args.m, 0.0, 1.0)
     dx = float(grid_np[1] - grid_np[0])
 
     Utrain = sample_grf(args.ntrain, grid_np, ell=args.ell)  # (ntrain, m)
+    Uval = sample_grf(args.nval, grid_np, ell=args.ell)  # NEW
     Utest  = sample_grf(args.ntest , grid_np, ell=args.ell)  # (ntest, m)
+    np.save(os.path.join(run_dir, 'val_U.npy'), Uval)
     np.save(os.path.join(run_dir, 'test_U.npy'), Utest)
     np.save(os.path.join(run_dir, 'grid.npy'), grid_np)
     np.save(os.path.join(run_dir, 'dx.npy'), np.array([dx], dtype=np.float32))
 
     # --- Torch tensors ---
     u_train = torch.tensor(Utrain, dtype=torch.float32, device=device)  # (ntrain, m)
+    u_val = torch.tensor(Uval, dtype=torch.float32, device=device)  # NEW
     u_test  = torch.tensor(Utest , dtype=torch.float32, device=device)  # (ntest, m)
     grid_t  = torch.tensor(grid_np, dtype=torch.float32, device=device) # (m,)
 
@@ -95,28 +109,43 @@ def main():
 
         # quick validation on a slice of test set every 500 steps
         rel = None
-        if step % 500 == 0 or step == args.steps:
+
+        # record this step
+        cur_lr = opt.param_groups[0]["lr"]
+        hist["step"].append(step)
+        hist["loss"].append(float(loss.item()))
+        hist["loss_pde"].append(float(loss_res.item()))  # physics residual ≈ PDE term
+        hist["loss_ic"].append(float(loss_ic.item()))  # IC penalty
+        hist["loss_bc"].append(0.0)  # no BCs in the ODE setup
+        hist["lr"].append(float(cur_lr))
+
+        # periodically flush to disk so plotter can read mid-training
+        if step % 200 == 0:
+            _flush_npz()
+
+        if step % args.val_every == 0 or step == args.steps:
             with torch.no_grad():
-                Bv = min(32, args.ntest)
+                Bv = min(32, args.nval)
                 x_t = grid_t.view(1, args.m, 1).repeat(Bv, 1, 1)
-                s_hat = model(u_test[:Bv], x_t)
-                s_true = torch.cumsum(u_test[:Bv], dim=1) * dx
+                s_hat = model(u_val[:Bv], x_t)
+                s_true = torch.cumsum(u_val[:Bv], dim=1) * dx
                 num = torch.linalg.norm(s_hat - s_true, dim=1)
                 den = torch.linalg.norm(s_true, dim=1) + 1e-12
                 rel = (num / den).mean().item()
 
-            # save last
             save_checkpoint(last_ckpt, model, opt, step=step, metric_relL2=rel, cfg=vars(args))
-            # save best
             if rel < best_rel:
                 best_rel = rel
                 save_checkpoint(best_ckpt, model, opt, step=step, metric_relL2=rel, cfg=vars(args))
 
         pbar.set_description(f"step {step:5d}  loss={loss.item():.3e}" + (f"  relL2={rel:.3e}" if rel is not None else ""))
 
+    _flush_npz()
+    print(f"Saved training log to: {log_path}")
     print(f"Training done. Best rel-L2: {best_rel:.4e}")
     print(f"Best checkpoint: {best_ckpt}")
     print(f"Last checkpoint: {last_ckpt}")
+
 
 if __name__ == "__main__":
     main()
