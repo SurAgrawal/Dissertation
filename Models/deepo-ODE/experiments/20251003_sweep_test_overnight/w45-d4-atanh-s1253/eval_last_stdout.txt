@@ -1,0 +1,10 @@
+Overall (mean over 1000 tests):
+  relL2     = 0.031827 ± 0.017958
+  MAE       = 0.007636 ± 0.004489
+  RMSE      = 0.008932 ± 0.005119
+  MaxAbs    = 0.016163 ± 0.009012
+  R^2       = 0.996826 ± 0.003680
+Saved overall metrics to: C:\Users\Sur Agrawal\PycharmProjects\Dissertation\Models\deepo-ODE\experiments\20251003_sweep_test_overnight\w45-d4-atanh-s1253\metrics.json
+Saved summary bar plot to: C:\Users\Sur Agrawal\PycharmProjects\Dissertation\Models\deepo-ODE\experiments\20251003_sweep_test_overnight\w45-d4-atanh-s1253\relL2_summary_bar.png
+Wrote per-sample metrics to: C:\Users\Sur Agrawal\PycharmProjects\Dissertation\Models\deepo-ODE\experiments\20251003_sweep_test_overnight\w45-d4-atanh-s1253\eval-last-20251004-002540\per_sample_metrics.csv
+Wrote 12 PNGs and 6 CSVs to: C:\Users\Sur Agrawal\PycharmProjects\Dissertation\Models\deepo-ODE\experiments\20251003_sweep_test_overnight\w45-d4-atanh-s1253\eval-last-20251004-002540

@@ -658,7 +658,7 @@ def aggregate_results(results: List[Dict[str, Any]], exp_root: Path) -> None:
         labels_legend.append(act)
     ax.legend(handles, labels_legend, title='Activation', loc='best')
     ax.set_xscale('log')
-    ax.set_yscale('log')
+    # ax.set_yscale('log')
     ax.set_xlabel('Parameter count')
     ax.set_ylabel('Mean test relL2')
     ax.set_title('Model capacity vs performance')

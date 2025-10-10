@@ -1,0 +1,17 @@
+{
+  "ntrain": 2058,
+  "ntest": 1000,
+  "m": 100,
+  "ell": 0.2,
+  "steps": 8000,
+  "batch": 256,
+  "width": 25,
+  "depth": 1,
+  "activation": "tanh",
+  "lr": 0.001,
+  "save_dir": "C:\\Users\\Sur Agrawal\\PycharmProjects\\Dissertation\\Models\\deepo-ODE\\experiments\\20251003_sweep_test_overnight2",
+  "run_name": "w25-d1-atanh-s234",
+  "seed": 234,
+  "nval": 512,
+  "val_every": 500
+}
