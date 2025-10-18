@@ -6,9 +6,9 @@ Usage:
 """
 
 import os, math, argparse, torch, numpy as np
-from Shared.pinn_models import MLP, MLPConfig, fourier_features
-from Shared.pinn_ops import PDEConfig, make_grid, forcing, u_of_x_builder
-from Shared.pinn_train import train_model
+from ..Shared.pinn_models import MLP, MLPConfig, fourier_features
+from ..Shared.pinn_ops import PDEConfig, make_grid, forcing, u_of_x_builder
+from ..Shared.pinn_train import train_model
 
 torch.set_default_dtype(torch.float64)
 device = "cuda" if torch.cuda.is_available() else "cpu"

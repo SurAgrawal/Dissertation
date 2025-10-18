@@ -9,9 +9,9 @@ Usage:
 """
 
 import os, math, argparse, numpy as np, torch, matplotlib.pyplot as plt
-from Shared.pinn_models import MLP, MLPConfig, fourier_features
-from Shared.pinn_ops import PDEConfig, make_grid, forcing, A_matrix, u_of_x_builder
-from Shared.plot_spectrum import plot_spectrum, plot_losses, plot_relerrs
+from ..Shared.pinn_models import MLP, MLPConfig, fourier_features
+from ..Shared.pinn_ops import PDEConfig, make_grid, forcing, A_matrix, u_of_x_builder
+from ..Shared.plot_spectrum import plot_spectrum, plot_losses, plot_relerrs
 
 torch.set_default_dtype(torch.float64)
 device = "cuda" if torch.cuda.is_available() else "cpu"
