@@ -45,6 +45,7 @@ def train_model(model, x, weights, f_grid, k: float, featurizer=None, steps: int
         u_of_x = u_of_x_builder(model, featurizer)
         loss = physics_loss(u_of_x, x, weights, f_grid)
         loss.backward()
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), 2.0)
         opt.step()
 
         with torch.no_grad():

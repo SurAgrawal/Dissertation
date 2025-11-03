@@ -1,0 +1,43 @@
+{
+  "timestamp": "2025-10-19 15:06:49",
+  "host": "DESKTOP-6RVPVUS",
+  "device": "cuda",
+  "args": {
+    "steps": 2000,
+    "width": 64,
+    "depth": 3,
+    "K": 20,
+    "lr": 0.001,
+    "outdir": "Models\\PreconditioningAttempt\\checkpoints",
+    "prefix": "poisson",
+    "no_progress": false
+  },
+  "extra": {
+    "pde": {
+      "N": 2048,
+      "k": 1.0,
+      "lam_bc": 0.0,
+      "domain_left": -3.141592653589793,
+      "domain_right": 3.141592653589793
+    },
+    "model_plain": {
+      "in_dim": 1,
+      "width": 64,
+      "depth": 3
+    },
+    "model_ff": {
+      "in_dim": 40,
+      "width": 64,
+      "depth": 3,
+      "K": 20
+    },
+    "optimizer": {
+      "lr": 0.001,
+      "steps": 2000
+    },
+    "files": {
+      "plain_ckpt": "poisson_plain_last.pt",
+      "ff_ckpt": "poisson_ff_last.pt"
+    }
+  }
+}
