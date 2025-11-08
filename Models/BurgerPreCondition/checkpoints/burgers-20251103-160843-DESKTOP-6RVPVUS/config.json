@@ -1,0 +1,38 @@
+{
+  "physics": {
+    "Nx": 256,
+    "Nt": 128,
+    "a": 0.0,
+    "b": 6.283185307179586,
+    "T": 0.1,
+    "nu": 0.01,
+    "boundary": "periodic",
+    "hard_periodic": true,
+    "lambda_ic": 1.0,
+    "lambda_bc": 1.0,
+    "device": "cuda"
+  },
+  "features": {
+    "Kx": 8,
+    "Mt": 4,
+    "T": 0.1,
+    "nu": 0.01,
+    "hard_periodic": true
+  },
+  "model_plain": {
+    "in_dim": 2,
+    "width": 128,
+    "depth": 3
+  },
+  "model_ff": {
+    "in_dim": 64,
+    "width": 128,
+    "depth": 3,
+    "Kx": 8,
+    "Mt": 4
+  },
+  "optimizer": {
+    "lr": 0.001,
+    "epochs": 500
+  }
+}
