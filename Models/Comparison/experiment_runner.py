@@ -70,7 +70,7 @@ and writes summary tables and plots once the sweep is complete.
 
 This script only orchestrates the experiments – you must have all
 dependencies (e.g. PyTorch) installed for the individual training and
-evaluation scripts to run correctly.  Furthermore the orchestrator does
+evaluation scripts to run correctly.  Furthermore, the orchestrator does
 not alter any of the underlying model or loss definitions, faithfully
 reusing the provided code.
 """

@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-03-05 19:18:08",
+  "args": {
+    "steps": 5000,
+    "lr": 0.001,
+    "width": 64,
+    "depth": 3,
+    "K": 10,
+    "q": 4096,
+    "q_bc": 2048,
+    "w_pde": 1.0,
+    "w_bc": 1.0,
+    "act": "tanh",
+    "device": "cuda",
+    "outdir": "Models\\PreconditioningAttempt\\checkpoints_2d",
+    "tag": "precond_poisson_2d",
+    "eval_every": 200,
+    "fdm_N": 41,
+    "seed": 0
+  }
+}
