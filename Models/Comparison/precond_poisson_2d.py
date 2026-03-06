@@ -2,7 +2,8 @@
 precond_poisson_2d.py
 ---------------------
 
-Eigenvalue-scaled Dirichlet-sine preconditioning for the 2-D Poisson equation.
+Eigenvalue-scaled Dirichlet-sine feature preconditioning for the 2-D Poisson equation
+(using boundary penalty, not hard enforcement).
 
 We solve on Ω=(0,1)^2:
     -Δu = f,    u|∂Ω = 0,
@@ -20,7 +21,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Dict
+from typing import Callable, Dict
 
 import numpy as np
 import torch
@@ -41,16 +42,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Exact solution + RHS + grad
 # -----------------------------
 def exact_solution(x: torch.Tensor) -> torch.Tensor:
-    # x: (N,2)
+    """Analytical solution sin(pi x) sin(pi y)."""
     return torch.sin(np.pi * x[:, [0]]) * torch.sin(np.pi * x[:, [1]])
 
 
 def rhs(x: torch.Tensor) -> torch.Tensor:
-    # For -Δu = f and u=sin(pi x) sin(pi y):  -Δu = 2*pi^2*u
+    """Right hand side f for -Δu = f given the analytic solution."""
     return 2.0 * (np.pi ** 2) * exact_solution(x)
 
 
 def exact_grad(x: torch.Tensor) -> torch.Tensor:
+    """Analytical gradient of the exact solution."""
     gx = np.pi * torch.cos(np.pi * x[:, [0]]) * torch.sin(np.pi * x[:, [1]])
     gy = np.pi * torch.sin(np.pi * x[:, [0]]) * torch.cos(np.pi * x[:, [1]])
     return torch.cat([gx, gy], dim=1)
@@ -65,7 +67,6 @@ def dirichlet_sine_features_scaled(x: torch.Tensor, k_max: int) -> torch.Tensor:
     with λ_nm = (n^2+m^2)π^2, n,m=1..k_max.
     Returns shape (N, k_max^2).
     """
-    # x: (N,2)
     N = x.shape[0]
     xx = x[:, 0].reshape(N, 1, 1)
     yy = x[:, 1].reshape(N, 1, 1)
@@ -82,6 +83,8 @@ def dirichlet_sine_features_scaled(x: torch.Tensor, k_max: int) -> torch.Tensor:
 # MLP (tanh as in your script)
 # -----------------------------
 class MLP(nn.Module):
+    """Simple fully connected network with configurable depth and width."""
+
     def __init__(self, in_dim: int, width: int, depth: int, out_dim: int = 1) -> None:
         super().__init__()
         layers = []
@@ -98,50 +101,30 @@ class MLP(nn.Module):
 
 
 # -----------------------------
-# Hard Dirichlet lift u = g*v
-# -----------------------------
-def lift_dirichlet_zero(x: torch.Tensor) -> torch.Tensor:
-    """
-    g(x,y)=x(1-x)y(1-y) so u=g*v enforces u=0 on ∂Ω exactly.
-    x: (N,2)
-    """
-    xx = x[:, [0]]
-    yy = x[:, [1]]
-    return xx * (1.0 - xx) * yy * (1.0 - yy)  # (N,1)
-
-
-def model_u(model_v: nn.Module, x: torch.Tensor, k_max: int) -> torch.Tensor:
-    """
-    u(x)=g(x)*v(φ(x)), returns (N,1)
-    """
-    z = dirichlet_sine_features_scaled(x, k_max)
-    v = model_v(z)  # (N,1)
-    return lift_dirichlet_zero(x) * v
-
-
-# -----------------------------
 # Residuals: -Δu - f = 0
 # -----------------------------
-def pde_residual(model_v: nn.Module, x_interior: torch.Tensor, k_max: int) -> torch.Tensor:
+def pde_residual(model: nn.Module, x_interior: torch.Tensor,
+                 rhs_func: Callable[[torch.Tensor], torch.Tensor],
+                 k_max: int) -> torch.Tensor:
+    """Compute squared residual of -Δu - f = 0 at interior points."""
     x_interior = x_interior.clone().detach().requires_grad_(True)
-    u = model_u(model_v, x_interior, k_max)  # (N,1)
+    u = model(dirichlet_sine_features_scaled(x_interior, k_max))  # (N,1)
 
     grads = torch_grad(u, x_interior, torch.ones_like(u), create_graph=True)[0]  # (N,2)
     lap_parts = []
     for i in range(2):
-        gi = grads[:, i]
-        g2 = torch_grad(gi, x_interior, torch.ones_like(gi), create_graph=True)[0][:, i]
-        lap_parts.append(g2)
-    lap = (lap_parts[0] + lap_parts[1]).unsqueeze(-1)  # (N,1)
+        grad_i = grads[:, i]
+        second = torch_grad(grad_i, x_interior, torch.ones_like(grad_i), create_graph=True)[0][:, i]
+        lap_parts.append(second)
+    laplacian = (lap_parts[0] + lap_parts[1]).unsqueeze(-1)  # (N,1)
 
-    res = -lap - rhs(x_interior)  # (N,1)
+    res = -laplacian - rhs_func(x_interior)
     return res.pow(2)
 
 
-def boundary_residual(model_v: nn.Module, x_boundary: torch.Tensor, k_max: int) -> torch.Tensor:
-    # With the lift, u is identically 0 on boundary (up to numerical roundoff),
-    # but we keep this term for compatibility with your comparison harness.
-    u = model_u(model_v, x_boundary, k_max)
+def boundary_residual(model: nn.Module, x_boundary: torch.Tensor, k_max: int) -> torch.Tensor:
+    """Squared residual of boundary condition u=0 at boundary points (penalty)."""
+    u = model(dirichlet_sine_features_scaled(x_boundary, k_max))
     return u.pow(2)
 
 
@@ -159,12 +142,13 @@ def train_preconditioned_poisson(
     seed: int = 0,
     outdir: str = "./",
 ) -> None:
+    """Train PINN with eigenvalue-scaled Dirichlet-sine features and record metrics."""
     torch.manual_seed(seed)
     np.random.seed(seed)
 
     in_dim = k_max * k_max
-    model_v = MLP(in_dim, width, depth, out_dim=1).to(device)
-    optimizer = torch.optim.Adam(model_v.parameters(), lr=1e-3)
+    model = MLP(in_dim, width, depth).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
     metrics: Dict[str, list] = {
         "iteration": [],
@@ -178,22 +162,18 @@ def train_preconditioned_poisson(
     run_dir = os.path.join(outdir, f"{ts}-precond")
     os.makedirs(run_dir, exist_ok=True)
 
-    # eval grid (100x100)
-    eval_coords = torch.stack(
-        torch.meshgrid(
-            torch.linspace(0.0, 1.0, 100, device=device),
-            torch.linspace(0.0, 1.0, 100, device=device),
-            indexing="ij",
-        ),
-        dim=-1,
-    ).reshape(-1, 2)
+    # evaluation grid for error measurement
+    eval_coords = torch.stack(torch.meshgrid(
+        torch.linspace(0.0, 1.0, 100, device=device),
+        torch.linspace(0.0, 1.0, 100, device=device),
+        indexing="ij"
+    ), dim=-1).reshape(-1, 2)
 
-    for it in tqdm(range(steps + 1), desc="Precond Training", unit="it"):
-        # interior points
+    for it in tqdm(range(steps + 1), desc="Preconditioned Training", unit="it"):
+        # sample interior points uniformly
         x_int = torch.rand(batch_interior, 2, device=device)
 
-        # boundary points (4 edges)
-        # ensure divisible by 4 for even sampling; if not, truncate
+        # sample boundary points (four edges); keep same style as your other scripts
         bb = (batch_boundary // 4) * 4
         s = torch.rand(bb // 4, 1, device=device)
         left = torch.cat([torch.zeros_like(s), s], dim=1)
@@ -203,23 +183,23 @@ def train_preconditioned_poisson(
         x_bdry = torch.cat([left, right, bottom, top], dim=0)
 
         optimizer.zero_grad(set_to_none=True)
-        res_int = pde_residual(model_v, x_int, k_max)
-        res_bdry = boundary_residual(model_v, x_bdry, k_max)
+        res_int = pde_residual(model, x_int, rhs, k_max)
+        res_bdry = boundary_residual(model, x_bdry, k_max)
         loss = res_int.mean() + res_bdry.mean()
         loss.backward()
         optimizer.step()
 
         if it % log_every == 0:
-            # L2 error
+            # L2 error without grads
             with torch.no_grad():
-                pred = model_u(model_v, eval_coords, k_max)
+                pred = model(dirichlet_sine_features_scaled(eval_coords, k_max))
                 true = exact_solution(eval_coords)
                 err = pred - true
                 l2_error = torch.sqrt(torch.mean(err ** 2)).item()
 
-            # H1 error (needs grads)
+            # H1 error (needs grads wrt coords)
             eval_coords.requires_grad_(True)
-            out = model_u(model_v, eval_coords, k_max)
+            out = model(dirichlet_sine_features_scaled(eval_coords, k_max))
             grads = torch_grad(out, eval_coords, torch.ones_like(out), create_graph=False)[0]
             grad_true = exact_grad(eval_coords)
             grad_err = grads - grad_true
@@ -242,7 +222,7 @@ def train_preconditioned_poisson(
 
 def main() -> None:
     import argparse
-    parser = argparse.ArgumentParser(description="Train preconditioned 2D Poisson PINN (Dirichlet sine eigenfeatures) and log metrics.")
+    parser = argparse.ArgumentParser(description="Train preconditioned 2D Poisson PINN (eigenvalue-scaled sine features) and log metrics.")
     parser.add_argument("--steps", type=int, default=50_000)
     parser.add_argument("--log_every", type=int, default=1000)
     parser.add_argument("--batch_interior", type=int, default=1024)
