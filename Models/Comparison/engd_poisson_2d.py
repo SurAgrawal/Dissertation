@@ -46,6 +46,7 @@ def main(
     hidden_depth: int = 1,
     seed: int = 0,
     outdir: str = "./",
+    tol: float = 0.0,
 ) -> None:
     """Train the 2‑D Poisson PINN with energy natural gradient descent.
 
@@ -60,6 +61,10 @@ def main(
             create a deeper network of equal‑width hidden layers.
         seed: Random seed.
         outdir: Directory to which metrics are written.
+        tol: Early stopping tolerance.  If ``tol > 0`` the training loop will
+            terminate early once the absolute change in loss between two
+            logging steps falls below this threshold.  A value of 0 disables
+            early stopping.
     """
 
     # domains
@@ -162,6 +167,16 @@ def main(
             tqdm.write(
                 f"ENGD Iteration {iteration}: loss={l_val:.6e}, L2={l2_err:.6e}, H1={h1_err:.6e}, step={actual_step}"
             )
+            # Early stopping based on loss stagnation
+            if tol > 0.0 and len(metrics["loss"]) >= 2:
+                prev_loss = metrics["loss"][-2]
+                curr_loss = metrics["loss"][-1]
+                if abs(prev_loss - curr_loss) < tol:
+                    tqdm.write(
+                        f"Early stopping at iteration {iteration} due to loss stagnation "
+                        f"(change {abs(prev_loss - curr_loss):.3e} < tol {tol})"
+                    )
+                    break
 
     # save metrics
     out_path = os.path.join(run_dir, "engd_metrics.npz")
@@ -201,6 +216,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument("--outdir", type=str, default="./poisson_logs", help="Output directory")
+    parser.add_argument(
+        "--tol", type=float, default=0.0,
+        help=(
+            "Early stopping tolerance.  If >0, training will terminate once the absolute"
+            " change in loss between successive log events is below this threshold."
+        ),
+    )
     args = parser.parse_args()
     main(
         args.steps,
@@ -209,4 +231,5 @@ if __name__ == "__main__":
         args.hidden_depth,
         args.seed,
         args.outdir,
+        args.tol,
     )

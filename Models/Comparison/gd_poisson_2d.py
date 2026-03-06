@@ -42,6 +42,7 @@ def main(
     hidden_depth: int = 1,
     seed: int = 0,
     outdir: str = "./",
+    tol: float = 0.0,
 ) -> None:
     """Train a PINN for the 2‑D Poisson problem using gradient descent.
 
@@ -54,6 +55,10 @@ def main(
             deeper network with repeated hidden layers of equal width.
         seed: Random seed.
         outdir: Directory where metrics will be saved.
+        tol: Early stopping tolerance.  If ``tol > 0`` the training loop will
+            exit once the absolute difference in loss between consecutive
+            logging intervals drops below this value.  A zero value disables
+            early stopping.
     """
 
     # domains
@@ -145,6 +150,16 @@ def main(
             tqdm.write(
                 f"GD Iteration {iteration}: loss={l_val:.6e}, L2={l2_err:.6e}, H1={h1_err:.6e}, step={actual_step}"
             )
+            # Early stopping: break if loss change below tolerance
+            if tol > 0.0 and len(metrics["loss"]) >= 2:
+                prev_loss = metrics["loss"][-2]
+                curr_loss = metrics["loss"][-1]
+                if abs(prev_loss - curr_loss) < tol:
+                    tqdm.write(
+                        f"Early stopping at iteration {iteration} due to loss stagnation "
+                        f"(change {abs(prev_loss - curr_loss):.3e} < tol {tol})"
+                    )
+                    break
 
     # save metrics
     out_path = os.path.join(run_dir, "gd_metrics.npz")
@@ -183,6 +198,14 @@ if __name__ == "__main__":
     )
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument("--outdir", type=str, default="./poisson_logs", help="Output directory")
+    parser.add_argument(
+        "--tol", type=float, default=0.0,
+        help=(
+            "Early stopping tolerance.  Training terminates early when the"
+            " change in loss between successive log intervals falls below this"
+            " threshold.  Set to zero to disable early stopping."
+        ),
+    )
     args = parser.parse_args()
     main(
         args.steps,
@@ -191,4 +214,5 @@ if __name__ == "__main__":
         args.hidden_depth,
         args.seed,
         args.outdir,
+        args.tol,
     )

@@ -62,7 +62,8 @@ def run_solver(
     width: int,
     depth: int,
     pre_params: Dict[str, int],
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
+    tol: float = 0.0,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, str]:
     """Execute a solver by name and return its recorded metrics.
 
     Parameters
@@ -105,6 +106,7 @@ def run_solver(
             hidden_depth=depth,
             seed=seed,
             outdir=base_outdir,
+            tol=tol,
         )
     elif name == "engd":
         # Run energy natural gradient solver via its main entrypoint
@@ -115,6 +117,7 @@ def run_solver(
             hidden_depth=depth,
             seed=seed,
             outdir=base_outdir,
+            tol=tol,
         )
     elif name == "gd":
         # Run gradient descent solver via its main entrypoint
@@ -125,6 +128,7 @@ def run_solver(
             hidden_depth=depth,
             seed=seed,
             outdir=base_outdir,
+            tol=tol,
         )
     elif name == "precond":
         # Run the preconditioned solver.  The module ``pre_solver``
@@ -139,6 +143,7 @@ def run_solver(
             depth=pre_params.get("depth", depth),
             seed=seed,
             outdir=base_outdir,
+            tol=tol,
         )
     else:
         raise ValueError(f"Unknown solver name '{name}'")
@@ -182,6 +187,14 @@ def main() -> None:
     parser.add_argument("--gd-width", type=int, default=32, help="Hidden layer width for the GD solver")
     parser.add_argument("--gd-depth", type=int, default=1, help="Hidden layer depth for the GD solver")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
+    # Early stopping tolerance: shared across all solvers.  If positive,
+    # training of each solver will cease when the absolute change in loss
+    # between successive logging events drops below this value.  Set to 0
+    # to disable early stopping.
+    parser.add_argument(
+        "--tol", type=float, default=0.0,
+        help="Early stopping tolerance for loss stagnation across solvers"
+    )
     # Preconditioner specific arguments
     parser.add_argument("--pre-batch-interior", type=int, default=512, help="Interior batch size for preconditioned solver")
     parser.add_argument("--pre-batch-boundary", type=int, default=128, help="Boundary batch size for preconditioned solver")
@@ -231,6 +244,7 @@ def main() -> None:
             width=solver_params[name]["width"],
             depth=solver_params[name]["depth"],
             pre_params=pre_params,
+            tol=args.tol,
         )
         results[name] = {
             "iteration": iters,

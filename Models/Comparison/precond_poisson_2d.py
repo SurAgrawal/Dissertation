@@ -141,6 +141,7 @@ def train_preconditioned_poisson(
     depth: int = 3,
     seed: int = 0,
     outdir: str = "./",
+    tol: float = 0.0,
 ) -> None:
     """Train PINN with eigenvalue-scaled Dirichlet-sine features and record metrics."""
     torch.manual_seed(seed)
@@ -214,6 +215,16 @@ def train_preconditioned_poisson(
             tqdm.write(
                 f"Precond Iter {it}: loss={loss.item():.6e}, L2={l2_error:.6e}, H1={h1_error:.6e}"
             )
+            # Early stopping: break if loss change below tolerance
+            if tol > 0.0 and len(metrics["loss"]) >= 2:
+                prev_loss = metrics["loss"][-2]
+                curr_loss = metrics["loss"][-1]
+                if abs(prev_loss - curr_loss) < tol:
+                    tqdm.write(
+                        f"Early stopping at iteration {it} due to loss stagnation "
+                        f"(change {abs(prev_loss - curr_loss):.3e} < tol {tol})"
+                    )
+                    break
 
     out_path = os.path.join(run_dir, "precond_metrics.npz")
     np.savez(out_path, **metrics)
@@ -255,6 +266,14 @@ def main() -> None:
     parser.add_argument("--depth", type=int, default=3)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--outdir", type=str, default="./poisson_logs")
+    parser.add_argument(
+        "--tol", type=float, default=0.0,
+        help=(
+            "Early stopping tolerance for the preconditioned solver.  When the absolute"
+            " difference in loss between consecutive logging events falls below this"
+            " value, training will stop early.  Set to zero to disable early stopping."
+        ),
+    )
     args = parser.parse_args()
     train_preconditioned_poisson(
         args.steps,
@@ -266,6 +285,7 @@ def main() -> None:
         args.depth,
         args.seed,
         args.outdir,
+        args.tol,
     )
 
 
