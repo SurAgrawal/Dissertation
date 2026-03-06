@@ -34,18 +34,23 @@ from typing import Dict, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Ensure the poisson_comparison package can be imported.  Add the
-# directory containing this script to the Python path and append the
-# subfolder.
+# Ensure the directory containing this script is on the Python path so
+# that the local solver modules can be imported.  In the user's
+# workflow all solver files reside alongside this script in the same
+# directory rather than inside a separate package.  Adding the script
+# directory to ``sys.path`` allows statements like ``import
+# adam_poisson_2d`` to succeed when run as a standalone script.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-POISSON_DIR = os.path.join(SCRIPT_DIR, "poisson_comparison")
-if POISSON_DIR not in sys.path:
-    sys.path.append(POISSON_DIR)
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
 
-from .adam_poisson_2d import main as adam_solver  # type: ignore
-from .engd_poisson_2d import main as engd_solver  # type: ignore
-from .gd_poisson_2d import main as gd_solver      # type: ignore
-from .precond_poisson_2d import train_preconditioned_poisson as pre_solver  # type: ignore
+# Import solver entrypoints from local modules.  Each solver module
+# defines a ``main`` function for training.  The preconditioned solver
+# exports ``train_preconditioned_poisson`` as its entrypoint.
+import adam_poisson_2d as adam_solver  # type: ignore
+import engd_poisson_2d as engd_solver  # type: ignore
+import gd_poisson_2d as gd_solver      # type: ignore
+import precond_poisson_2d as pre_solver  # type: ignore
 
 
 def run_solver(
@@ -92,8 +97,8 @@ def run_solver(
     # Capture wall‑clock training time
     start_time = time.perf_counter()
     if name == "adam":
-        # Run Adam solver
-        adam_solver(
+        # Run Adam solver via its main entrypoint
+        adam_solver.main(
             steps=steps,
             log_every=log_every,
             hidden_width=width,
@@ -102,8 +107,8 @@ def run_solver(
             outdir=base_outdir,
         )
     elif name == "engd":
-        # Run energy natural gradient solver
-        engd_solver(
+        # Run energy natural gradient solver via its main entrypoint
+        engd_solver.main(
             steps=steps,
             log_every=log_every,
             hidden_width=width,
@@ -112,8 +117,8 @@ def run_solver(
             outdir=base_outdir,
         )
     elif name == "gd":
-        # Run gradient descent solver
-        gd_solver(
+        # Run gradient descent solver via its main entrypoint
+        gd_solver.main(
             steps=steps,
             log_every=log_every,
             hidden_width=width,
@@ -122,8 +127,9 @@ def run_solver(
             outdir=base_outdir,
         )
     elif name == "precond":
-        # Run preconditioned solver.  Provide batch sizes, width and depth.
-        pre_solver(
+        # Run the preconditioned solver.  The module ``pre_solver``
+        # defines ``train_preconditioned_poisson`` as its training entrypoint.
+        pre_solver.train_preconditioned_poisson(
             steps=steps,
             log_every=log_every,
             batch_interior=pre_params.get("batch_interior", 1024),
@@ -157,7 +163,7 @@ def run_solver(
     if not os.path.exists(metrics_file):
         raise RuntimeError(f"Metrics file not found for solver {name} at {metrics_file}")
     data = np.load(metrics_file)
-    return data["iteration"], data["loss"], data["l2_error"], data["h1_error"], train_time
+    return data["iteration"], data["loss"], data["l2_error"], data["h1_error"], train_time, run_dir
 
 
 def main() -> None:
@@ -216,7 +222,7 @@ def main() -> None:
         print(f"Running solver {name}...")
         # For the preconditioned solver, width/depth from solver_params are
         # passed in but overridden inside ``run_solver`` by ``pre_params``.
-        iters, losses, l2, h1, train_time = run_solver(
+        iters, losses, l2, h1, train_time, run_dir = run_solver(
             name,
             steps=args.steps,
             log_every=args.log_every,
@@ -232,6 +238,7 @@ def main() -> None:
             "l2_error": l2,
             "h1_error": h1,
             "training_time": train_time,
+            "run_dir": run_dir,
         }
 
     # Plot training loss comparisons
@@ -266,6 +273,77 @@ def main() -> None:
     # Also save raw metrics for convenience
     for name, data in results.items():
         np.savez(os.path.join(comparison_dir, f"{name}_metrics.npz"), **data)
+
+    # ------------------------------------------------------------------
+    # Generate per‑solver solution comparison images with unified colour
+    # scales.  To make differences across solvers immediately
+    # comparable, we determine a global minimum and maximum for the
+    # predicted and exact solutions across all solvers and a global
+    # maximum for the absolute error.  These values are then used as
+    # ``vmin`` and ``vmax`` when plotting the first two panels and
+    # ``vmax`` when plotting the error.  Each figure comprises three
+    # panels: the exact solution, the solver’s prediction, and the
+    # absolute error.
+    # ------------------------------------------------------------------
+    # First load all solution arrays and determine global ranges
+    solver_solutions: Dict[str, np.ndarray] = {}
+    global_min = float("inf")
+    global_max = float("-inf")
+    global_error_max = float("-inf")
+    # Build the exact solution grid lazily; we will compute it on demand
+    true_solution_cache: Dict[int, np.ndarray] = {}
+    for name, data in results.items():
+        run_dir = data.get("run_dir")
+        if name == "precond":
+            sol_file = "precond_solution.npy"
+        else:
+            sol_file = f"{name}_solution.npy"
+        sol_path = os.path.join(run_dir, sol_file)
+        if not os.path.exists(sol_path):
+            print(f"Warning: expected solution file {sol_path} not found; skipping plot.")
+            continue
+        sol = np.load(sol_path)
+        solver_solutions[name] = sol
+        global_min = min(global_min, float(sol.min()))
+        global_max = max(global_max, float(sol.max()))
+        # compute true solution for this grid size if not cached
+        N = sol.shape[0]
+        if N not in true_solution_cache:
+            xs = np.linspace(0.0, 1.0, N)
+            X, Y = np.meshgrid(xs, xs)
+            true_solution_cache[N] = np.sin(np.pi * X) * np.sin(np.pi * Y)
+        true_sol = true_solution_cache[N]
+        err = np.abs(sol - true_sol)
+        global_error_max = max(global_error_max, float(err.max()))
+    # Now create the figures using the global scales
+    for name, sol in solver_solutions.items():
+        N = sol.shape[0]
+        true_sol = true_solution_cache[N]
+        error = np.abs(sol - true_sol)
+        fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+        # panel 1: exact solution
+        im0 = axes[0].imshow(true_sol, extent=[0, 1, 0, 1], origin='lower',
+                             vmin=global_min, vmax=global_max, cmap='viridis')
+        axes[0].set_title('Exact solution')
+        fig.colorbar(im0, ax=axes[0])
+        # panel 2: solver prediction
+        im1 = axes[1].imshow(sol, extent=[0, 1, 0, 1], origin='lower',
+                             vmin=global_min, vmax=global_max, cmap='viridis')
+        axes[1].set_title(f'{name.capitalize()} solution')
+        fig.colorbar(im1, ax=axes[1])
+        # panel 3: absolute error
+        im2 = axes[2].imshow(error, extent=[0, 1, 0, 1], origin='lower',
+                             cmap='magma', vmin=0.0, vmax=global_error_max)
+        axes[2].set_title('Absolute error')
+        fig.colorbar(im2, ax=axes[2])
+        for ax in axes:
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+        fig.tight_layout()
+        img_path = os.path.join(comparison_dir, f"{name}_solution_comparison.png")
+        plt.savefig(img_path, dpi=200)
+        plt.close(fig)
+        print(f"Saved solution comparison plot for {name} to {img_path}")
 
 
 if __name__ == "__main__":

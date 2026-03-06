@@ -151,6 +151,24 @@ def main(
     np.savez(out_path, **metrics)
     print(f"Metrics saved to {out_path}")
 
+    # -------------------------------------------------------------------
+    # Compute and save the predicted solution on a regular grid.
+    #
+    # To assess the learned solution visually, evaluate the network
+    # on a dense grid of evaluation points spanning [0,1]^2.  The
+    # resulting prediction matrix is stored in the run directory and
+    # can later be compared to the analytical solution.
+    # -------------------------------------------------------------------
+    grid_res = 100
+    xs = jnp.linspace(0.0, 1.0, grid_res)
+    xv, yv = jnp.meshgrid(xs, xs)
+    grid = jnp.stack([xv, yv], axis=-1).reshape(-1, 2)
+    preds = v_model(params, grid)
+    preds_np = np.array(preds).reshape(grid_res, grid_res)
+    sol_path = os.path.join(run_dir, "gd_solution.npy")
+    np.save(sol_path, preds_np)
+    print(f"Solution saved to {sol_path}")
+
 
 if __name__ == "__main__":
     import argparse

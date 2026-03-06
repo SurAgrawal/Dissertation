@@ -168,6 +168,25 @@ def main(
     np.savez(out_path, **metrics)
     print(f"Metrics saved to {out_path}")
 
+    # -------------------------------------------------------------------
+    # Compute and save the predicted solution on a regular grid.
+    #
+    # After training, evaluate the trained model on a dense grid of
+    # points covering [0,1]^2.  This produces a 2‑D array of
+    # predictions that can be compared to the exact solution for
+    # visualisation purposes.  The array is saved in the run
+    # directory under a solver‑specific filename.
+    # -------------------------------------------------------------------
+    grid_res = 100
+    xs = jnp.linspace(0.0, 1.0, grid_res)
+    xv, yv = jnp.meshgrid(xs, xs)
+    grid = jnp.stack([xv, yv], axis=-1).reshape(-1, 2)
+    preds = v_model(params, grid)
+    preds_np = np.array(preds).reshape(grid_res, grid_res)
+    sol_path = os.path.join(run_dir, "engd_solution.npy")
+    np.save(sol_path, preds_np)
+    print(f"Solution saved to {sol_path}")
+
 
 if __name__ == "__main__":
     import argparse

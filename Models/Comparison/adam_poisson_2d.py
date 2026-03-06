@@ -167,6 +167,36 @@ def main(
     np.savez(out_path, **metrics)
     print(f"Metrics saved to {out_path}")
 
+    # -------------------------------------------------------------------
+    # Compute and save the predicted solution on a regular grid
+    #
+    # To visualise the learned solution against the analytical ground
+    # truth, we evaluate the trained PINN on a dense grid of points
+    # covering the unit square.  The resulting predictions are stored
+    # as a 2‑D NumPy array in the run directory.  This array has shape
+    # (grid_res, grid_res) where ``grid_res`` is the number of points
+    # along each coordinate axis.  A companion plotting script can
+    # then load this file and compare it to the exact solution.
+    # -------------------------------------------------------------------
+    grid_res = 100
+    # Use jax to build a mesh of evaluation points.  ``jnp.meshgrid``
+    # returns a pair of coordinate matrices; we stack and reshape them
+    # to obtain a list of (x,y) points.  These operations remain on
+    # the JAX device to avoid unnecessary transfers until conversion.
+    xs = jnp.linspace(0.0, 1.0, grid_res)
+    xv, yv = jnp.meshgrid(xs, xs)
+    grid = jnp.stack([xv, yv], axis=-1).reshape(-1, 2)
+    # Evaluate the model on the entire grid using the vectorised model.
+    preds = v_model(params, grid)
+    # Convert from a JAX array to a NumPy array and reshape back
+    # to (grid_res, grid_res).  ``np.array`` performs the host transfer.
+    preds_np = np.array(preds).reshape(grid_res, grid_res)
+    # Save the predicted solution to disk.  The filename encodes the
+    # solver name to aid downstream scripts.
+    sol_path = os.path.join(run_dir, "adam_solution.npy")
+    np.save(sol_path, preds_np)
+    print(f"Solution saved to {sol_path}")
+
 
 if __name__ == "__main__":
     import argparse

@@ -219,6 +219,29 @@ def train_preconditioned_poisson(
     np.savez(out_path, **metrics)
     print(f"Metrics saved to {out_path}")
 
+    # -------------------------------------------------------------------
+    # Compute and save the predicted solution on a regular grid.
+    #
+    # After training, evaluate the PINN on a dense grid of points to
+    # visualise the learned solution.  We generate a mesh of
+    # ``grid_res`` points in each dimension, compute the network
+    # prediction at each point using the same eigenvalue‑scaled
+    # Dirichlet‑sine features as during training, reshape the
+    # predictions into a 2‑D array, and store them in the run
+    # directory.  This file can then be loaded by external scripts
+    # to compare against the exact solution and visualise errors.
+    # -------------------------------------------------------------------
+    grid_res = 100
+    xs = torch.linspace(0.0, 1.0, grid_res, device=device)
+    xv, yv = torch.meshgrid(xs, xs, indexing="ij")
+    grid_coords = torch.stack([xv, yv], dim=-1).reshape(-1, 2)
+    with torch.no_grad():
+        pred = model(dirichlet_sine_features_scaled(grid_coords, k_max))
+    pred_np = pred.detach().cpu().numpy().reshape(grid_res, grid_res)
+    sol_path = os.path.join(run_dir, "precond_solution.npy")
+    np.save(sol_path, pred_np)
+    print(f"Solution saved to {sol_path}")
+
 
 def main() -> None:
     import argparse
