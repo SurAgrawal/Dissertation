@@ -1,0 +1,26 @@
+{
+  "adam": {
+    "final_loss": 0.02336915933038195,
+    "final_l2_error": 0.03934261433382187,
+    "final_h1_error": 0.3290718042728756,
+    "training_time_seconds": 242.0228972999612
+  },
+  "engd": {
+    "final_loss": 7.052862620741959e-12,
+    "final_l2_error": 8.54741103536956e-08,
+    "final_h1_error": 1.5195760185823473e-06,
+    "training_time_seconds": 16.175373599980958
+  },
+  "gd": {
+    "final_loss": 0.16860712863542332,
+    "final_l2_error": 0.06901631553777454,
+    "final_h1_error": 0.5672741426792387,
+    "training_time_seconds": 303.47190760006197
+  },
+  "precond": {
+    "final_loss": 7.046392159262685e-07,
+    "final_l2_error": 0.0001363442862129185,
+    "final_h1_error": 0.0002375121419473708,
+    "training_time_seconds": 7.212864900007844
+  }
+}
