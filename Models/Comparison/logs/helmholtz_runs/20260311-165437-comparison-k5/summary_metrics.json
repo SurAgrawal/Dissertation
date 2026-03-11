@@ -1,0 +1,8 @@
+{
+  "precond": {
+    "final_loss": 0.00012966378529858218,
+    "final_l2_error": 0.001023498480997367,
+    "final_h1_error": 0.005337642995856785,
+    "training_time_seconds": 49.11798769980669
+  }
+}
