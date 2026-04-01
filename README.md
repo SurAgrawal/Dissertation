@@ -109,7 +109,7 @@ Running `train.py` will create a run directory with a timestamp (using `make_run
 python -m Models.BurgerPreCondition.eval_burgers --run /path/to/run_dir --outdir /path/to/eval --compute-spectrum --spectral_Nx 256 --spectral_Nt 100 --num-slices 5
 ```
 
-The script reads `config.json` from the run directory to know the model widths, depths and Fourier feature counts, then plots the training loss and solution snapshots【573687317860835†L29-L60】.
+The script reads `config.json` from the run directory to know the model widths, depths and Fourier feature counts, then plots the training loss and solution snapshots.
 
 ---
 
